@@ -1,25 +1,59 @@
+# =========================
 # Python virtual environment
+# =========================
 venv/
 backend/venv/
 
 # Python cache
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 
-# Environment variables
+# =========================
+# Environment variables (Secrets)
+# =========================
 .env
 backend/.env
+frontend/.env
+frontend/.env.local
+frontend/.env.production
 
-# Node
+# =========================
+# Node / Frontend
+# =========================
 node_modules/
+frontend/node_modules/
 dist/
+frontend/dist/
+build/
+frontend/build/
 
-# VS Code
-.vscode/
-
-# OS
-.DS_Store
-
+# =========================
 # Runtime uploads (DO NOT COMMIT)
+# =========================
 backend/app/uploads/
 backend/app/uploads/**
+
+# =========================
+# Logs
+# =========================
+*.log
+
+# =========================
+# Editor / IDE
+# =========================
+.vscode/
+*.code-workspace
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Misc (local only)
+# =========================
+images/
+SQL.sql
