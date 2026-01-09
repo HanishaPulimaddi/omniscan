@@ -1,0 +1,25 @@
+# Python virtual environment
+venv/
+backend/venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Environment variables
+.env
+backend/.env
+
+# Node
+node_modules/
+dist/
+
+# VS Code
+.vscode/
+
+# OS
+.DS_Store
+
+# Runtime uploads (DO NOT COMMIT)
+backend/app/uploads/
+backend/app/uploads/**
