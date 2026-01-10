@@ -53,7 +53,18 @@ backend/app/uploads/**
 Thumbs.db
 
 # =========================
+# PostgreSQL backups
+# =========================
+
+# Ignore full / data backups
+db/*full*.sql
+db/*.dump
+db/*.bak
+
+# Explicitly track schema backup
+!db/omniscan_schema.sql
+
+# =========================
 # Misc (local only)
 # =========================
-images/
 SQL.sql
