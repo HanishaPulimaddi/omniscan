@@ -1,6 +1,3 @@
-# Docs: https://github.com/Azure/webapps-deploy
-# Python + Azure App Service (backend-in-subfolder)
-
 name: Build and deploy Python app to Azure Web App - omniscanwebapp
 
 on:
@@ -16,32 +13,34 @@ jobs:
       contents: read
 
     steps:
-      # 1️⃣ Checkout code
+      # 1️⃣ Checkout repo
       - uses: actions/checkout@v4
 
-      # 2️⃣ Set Python version
+      # 2️⃣ Setup Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      # 3️⃣ Install dependencies FROM backend folder
+      # 3️⃣ Debug: verify backend structure
+      - name: Verify backend files
+        run: |
+          ls -la
+          ls -la backend
+
+      # 4️⃣ Install backend dependencies (NO venv)
       - name: Install backend dependencies
         working-directory: backend
         run: |
-          python -m venv antenv
-          source antenv/bin/activate
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # 4️⃣ Upload ONLY backend as deployment artifact
-      - name: Upload artifact for deployment
+      # 5️⃣ Upload ONLY backend for deployment
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: python-app
-          path: |
-            backend
-            !backend/antenv
+          path: backend
 
   deploy:
     runs-on: ubuntu-latest
@@ -51,13 +50,13 @@ jobs:
       contents: read
 
     steps:
-      # 5️⃣ Download build artifact
+      # 6️⃣ Download artifact
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
           name: python-app
 
-      # 6️⃣ Azure Login (OIDC)
+      # 7️⃣ Azure login
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -65,7 +64,7 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_34E09C3977794B18B5FD78BAC2F74148 }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_6B0E9CED84444BCA83516D25CF26DE21 }}
 
-      # 7️⃣ Deploy backend folder to Azure App Service
+      # 8️⃣ Deploy backend folder
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
