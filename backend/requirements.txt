@@ -24,7 +24,7 @@ MarkupSafe==3.0.3
 pydicom==3.0.1
 scikit-image==0.22.0
 scipy==1.11.4
-tifffile==2025.10.16
+tifffile==2024.5.22
 
 # AI / ML (CPU-safe, Azure compatible)
 numpy==1.26.4
