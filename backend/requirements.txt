@@ -35,9 +35,6 @@ sympy==1.14.0
 networkx==3.4.2
 mpmath==1.3.0
 
-# Optional (keep only if used)
-monai==1.5.1
-
 # Image processing (Azure safe)
 opencv-python-headless==4.12.0.88
 pillow==12.0.0
@@ -56,4 +53,3 @@ python-dotenv==1.2.1
 # Uploads
 python-multipart==0.0.20
 sniffio==1.3.1
-
