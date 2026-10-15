@@ -27,15 +27,12 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         {/* ================= PROTECTED ROUTES ================= */}
         {/* Redirects to /login if there's no token */}
         <Route element={<ProtectedRoute />}>
-          <Route path="/report/:id" element={<Report />} />
-
-          {/* Wrapped inside App layout (sidebar/navbar) */}
+          {/* Wrapped inside App layout (top navigation) */}
           <Route path="/" element={<App />}>
             <Route index element={<Dashboard />} />
             <Route path="analyze" element={<Analyze />} />
-
-            {/* 🔗 Sidebar → View All Analysis */}
             <Route path="history" element={<History />} />
+            <Route path="report/:id" element={<Report />} />
           </Route>
         </Route>
 

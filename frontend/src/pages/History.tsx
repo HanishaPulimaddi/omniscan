@@ -1,12 +1,24 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { AlertCircle, CalendarDays, ChevronLeft, ChevronRight, FileText, ImageIcon, Search, X } from "lucide-react";
+import type { AxiosError } from "axios";
 import apiClient, { API_BASE } from "../services/apiClient";
+import { parseScores, prettyLabel, riskOf, topFindings } from "../lib/scores";
 
 // Pagination configuration
 const PAGE_SIZE = 5;
 const SEARCH_DEBOUNCE_MS = 400; // Debounce delay for search input
 
+type HistoryItem = {
+  scan_id: number;
+  file_name?: string;
+  uploaded_at: string | null;
+  report: string;
+  scores: unknown;
+};
+
 export default function History() {
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   
@@ -121,9 +133,9 @@ export default function History() {
         setTotalPages(0);
         setTotalItems(0);
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("History fetch error:", err);
-      setError(err.message || "Failed to load history");
+      setError((err as Error).message || "Failed to load history");
       setHistory([]);
     } finally {
       setLoading(false);
@@ -143,7 +155,6 @@ export default function History() {
   // Fetch history when page, search, or date filter changes
   useEffect(() => {
     fetchHistory(currentPage, search, selectedDateISO);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, search, selectedDateISO]);
 
   // Extract first 2 sentences for summary
@@ -222,368 +233,180 @@ export default function History() {
       const url = res.data.url as string;
       const fullUrl = url.startsWith("http") ? url : `${API_BASE}${url}`;
       window.open(fullUrl, "_blank", "noreferrer");
-    } catch (err: any) {
-      if (err.response?.status === 401) return; // apiClient already redirects to /login
+    } catch (err) {
+      if ((err as AxiosError).response?.status === 401) return; // apiClient already redirects to /login
       console.error("Failed to load scan image:", err);
-      alert("Failed to load scan image.");
+      setError("Failed to load scan image.");
     }
   };
 
-  return (
-    <div style={{ padding: "24px" }}>
-      <h2 style={{ marginBottom: "20px" }}>User History</h2>
+  const dateInvalid = Boolean(displayDate && !selectedDateISO && displayDate.trim() !== "");
+  const lastPage = totalPages || 1;
 
-      {/* Search Input */}
-      <div style={searchContainerStyle}>
-        <input
-          type="text"
-          placeholder="Search within your reports..."
-          value={searchInput}
-          onChange={handleSearchChange}
-          style={searchInputStyle}
-        />
-        {searchInput && (
-          <button
-            onClick={handleClearSearch}
-            style={clearButtonStyle}
-            title="Clear search"
-          >
-            ×
-          </button>
-        )}
+  // Up to five page numbers, centred on the current page where possible.
+  const pageNumbers = Array.from({ length: Math.min(5, lastPage) }, (_, i) => {
+    if (lastPage <= 5 || currentPage <= 3) return i + 1;
+    if (currentPage >= lastPage - 2) return lastPage - 4 + i;
+    return currentPage - 2 + i;
+  });
+
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <p className="eyebrow">History</p>
+          <h1>Your analyses</h1>
+          <p className="lead">Search past reports by finding, file name or date, and reopen any scan.</p>
+        </div>
       </div>
 
-      {/* Date Filter */}
+      {/* Search + date filter */}
       {/* NOTE: Using text input instead of native date input because native
           date inputs cannot be forced to MM/DD/YYYY format due to browser locale.
           We manually parse MM/DD/YYYY and convert to ISO format for the API. */}
-      <div style={dateFilterContainerStyle}>
-        <div style={dateFilterGroupStyle}>
-          <label style={dateLabelStyle} htmlFor="selected-date">
-            Select Date:
-          </label>
+      <div className="toolbar">
+        <div className="input-icon search">
+          <Search size={17} />
           <input
-            id="selected-date"
+            className="input"
             type="text"
-            placeholder="MM/DD/YYYY"
-            value={displayDate}
-            onChange={handleDateChange}
-            style={{
-              ...dateInputStyle,
-              ...(displayDate && !selectedDateISO && displayDate.trim() !== "" 
-                ? { borderColor: "#dc3545" } 
-                : {})
-            }}
-            maxLength={10}
+            placeholder="Search within your reports…"
+            value={searchInput}
+            onChange={handleSearchChange}
+            aria-label="Search reports"
           />
+          {searchInput && (
+            <button className="icon-btn clear-btn" onClick={handleClearSearch} title="Clear search">
+              <X size={15} />
+            </button>
+          )}
         </div>
-        {selectedDateISO && (
-          <button
-            onClick={handleClearDate}
-            style={clearDateButtonStyle}
-            title="Clear date filter"
-          >
-            Clear Date
-          </button>
-        )}
+
+        <div className="date">
+          <div className="input-icon">
+            <CalendarDays size={17} />
+            <input
+              id="selected-date"
+              className={`input${dateInvalid ? " invalid" : ""}`}
+              type="text"
+              placeholder="MM/DD/YYYY"
+              value={displayDate}
+              onChange={handleDateChange}
+              maxLength={10}
+              aria-label="Filter by date"
+            />
+            {displayDate && (
+              <button className="icon-btn clear-btn" onClick={handleClearDate} title="Clear date filter">
+                <X size={15} />
+              </button>
+            )}
+          </div>
+          {dateInvalid && <p className="hint-error">Use MM/DD/YYYY, e.g. 12/25/2025</p>}
+        </div>
       </div>
 
-      {loading && <p>Loading history...</p>}
-      {error && <p style={{ color: "red" }}>{error}</p>}
-
-      {!loading && history.length === 0 && !error && (
-        <p>
-          {search || selectedDateISO
-            ? selectedDateISO
-              ? "No records found for selected date."
-              : "No records found matching your filters."
-            : "No analysis history found."}
-        </p>
-      )}
-      
-      {/* Date input validation error */}
-      {displayDate && !selectedDateISO && displayDate.trim() !== "" && (
-        <p style={{ color: "#dc3545", fontSize: "14px", marginTop: "8px", marginBottom: "0" }}>
-          Invalid date format. Please use MM/DD/YYYY (e.g., 12/25/2025)
-        </p>
-      )}
-
-      {!loading && history.length > 0 && (
-        <div style={{ overflowX: "auto" }}>
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              background: "#fff",
-              borderRadius: "8px",
-              overflow: "hidden",
-            }}
-          >
-            <thead style={{ background: "#f1f3f5" }}>
-              <tr>
-                <th style={thStyle}>Uploaded At</th>
-                <th style={thStyle}>Scan Image</th>
-                <th style={thStyle}>Summary</th>
-                <th style={thStyle}>Actions</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {history.map((item, index) => (
-                <tr key={index} style={{ borderBottom: "1px solid #e9ecef" }}>
-                  {/* Uploaded At */}
-                  <td style={tdStyle}>
-                    {new Date(item.uploaded_at).toLocaleString()}
-                  </td>
-
-                  {/* View Scan BUTTON */}
-                  <td style={tdStyle}>
-                    <button
-                      onClick={() => handleViewScan(item.scan_id)}
-                      style={{ ...buttonStyle, border: "none", cursor: "pointer" }}
-                    >
-                      View Scan
-                    </button>
-                  </td>
-
-                  {/* Summary */}
-                  <td style={{ ...tdStyle, maxWidth: "420px" }}>
-                    {getSummary(item.report)}
-                  </td>
-
-                  {/* View Full Report BUTTON */}
-                  <td style={tdStyle}>
-                    <a
-                      href={`/report/${item.scan_id}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={buttonStyle}
-                    >
-                      View Full Report
-                    </a>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {error && (
+        <div className="alert alert-error" role="alert">
+          <AlertCircle size={17} />
+          {error}
         </div>
       )}
 
-      {/* Pagination Controls - Always visible when data is loaded */}
-      {!loading && history.length > 0 && (
-        <div style={paginationContainerStyle}>
-          <div style={paginationInfoStyle}>
-            Page {currentPage} of {totalPages || 1} ({totalItems} total)
-          </div>
-          <div style={paginationControlsStyle}>
-            <button
-              onClick={handlePreviousPage}
-              disabled={currentPage === 1}
-              style={{
-                ...paginationButtonStyle,
-                opacity: currentPage === 1 ? 0.5 : 1,
-                cursor: currentPage === 1 ? "not-allowed" : "pointer",
-              }}
-            >
-              Previous
-            </button>
-            
-            {/* Page numbers */}
-            {(() => {
-              const displayPages = totalPages || 1;
+      {!(error && !loading && history.length === 0) && (
+        <div className="list">
+          {loading ? (
+            <div className="loading-block">
+              <span className="spinner" /> Loading history…
+            </div>
+          ) : history.length === 0 ? (
+            <div className="empty">
+              <h3>
+                {search || selectedDateISO
+                  ? selectedDateISO
+                    ? "No records found for selected date"
+                    : "No records match your filters"
+                  : "No analysis history yet"}
+              </h3>
+              <p style={{ marginBottom: 20 }}>
+                {search || selectedDateISO
+                  ? "Try a different search term or clear the date filter."
+                  : "Analyze your first chest X-ray to start building your history."}
+              </p>
+              {!search && !selectedDateISO && (
+                <Link to="/analyze" className="btn btn-primary">
+                  Analyze a scan
+                </Link>
+              )}
+            </div>
+          ) : (
+            history.map((item) => {
+              const findings = topFindings(parseScores(item.scores), 2);
               return (
-                <div style={pageNumbersStyle}>
-                  {Array.from({ length: Math.min(5, displayPages) }, (_, i) => {
-                    let pageNum;
-                    if (displayPages <= 5) {
-                      pageNum = i + 1;
-                    } else if (currentPage <= 3) {
-                      pageNum = i + 1;
-                    } else if (currentPage >= displayPages - 2) {
-                      pageNum = displayPages - 4 + i;
-                    } else {
-                      pageNum = currentPage - 2 + i;
-                    }
-                    
-                    return (
-                      <button
-                        key={pageNum}
-                        onClick={() => handlePageChange(pageNum)}
-                        style={{
-                          ...paginationButtonStyle,
-                          ...(currentPage === pageNum ? activePageButtonStyle : {}),
-                        }}
-                      >
-                        {pageNum}
-                      </button>
-                    );
-                  })}
+                <div className="list-row" key={item.scan_id}>
+                  <div className="row-icon">
+                    <FileText size={22} />
+                  </div>
+
+                  <div className="row-main">
+                    <div className="row-title">
+                      {item.uploaded_at ? new Date(item.uploaded_at).toLocaleString() : `Scan #${item.scan_id}`}
+                      {findings.length > 0 ? (
+                        findings.map(([label, v]) => (
+                          <span key={label} className={`tag tag-${riskOf(v)}`}>
+                            {prettyLabel(label)}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="tag tag-low">No elevated findings</span>
+                      )}
+                    </div>
+                    <div className="row-summary">{getSummary(item.report)}</div>
+                  </div>
+
+                  <div className="row-actions">
+                    <button className="btn btn-outline btn-sm" onClick={() => handleViewScan(item.scan_id)}>
+                      <ImageIcon size={15} /> Scan
+                    </button>
+                    <Link to={`/report/${item.scan_id}`} className="btn btn-dark btn-sm">
+                      Full report
+                    </Link>
+                  </div>
                 </div>
               );
-            })()}
-            
+            })
+          )}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {!loading && history.length > 0 && (
+        <div className="pagination">
+          <span className="muted">
+            Page {currentPage} of {lastPage} · {totalItems} total
+          </span>
+          <div className="pages">
+            <button className="page-btn" onClick={handlePreviousPage} disabled={currentPage === 1}>
+              <ChevronLeft size={16} /> Prev
+            </button>
+            {pageNumbers.map((pageNum) => (
+              <button
+                key={pageNum}
+                className={`page-btn${currentPage === pageNum ? " active" : ""}`}
+                onClick={() => handlePageChange(pageNum)}
+              >
+                {pageNum}
+              </button>
+            ))}
             <button
+              className="page-btn"
               onClick={handleNextPage}
-              disabled={currentPage === (totalPages || 1) || totalPages === 0}
-              style={{
-                ...paginationButtonStyle,
-                opacity: (currentPage === (totalPages || 1) || totalPages === 0) ? 0.5 : 1,
-                cursor: (currentPage === (totalPages || 1) || totalPages === 0) ? "not-allowed" : "pointer",
-              }}
+              disabled={currentPage === lastPage || totalPages === 0}
             >
-              Next
+              Next <ChevronRight size={16} />
             </button>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
-
-/* ================= STYLES ================= */
-
-const thStyle = {
-  padding: "12px",
-  textAlign: "left" as const,
-  fontWeight: 600,
-  fontSize: "14px",
-};
-
-const tdStyle = {
-  padding: "12px",
-  fontSize: "14px",
-  verticalAlign: "top" as const,
-};
-
-const buttonStyle = {
-  padding: "6px 12px",
-  borderRadius: "6px",
-  background: "#0D1B2A",
-  color: "#ffffff",
-  textDecoration: "none",
-  fontSize: "13px",
-  fontWeight: 500,
-  display: "inline-block",
-};
-
-/* ================= PAGINATION STYLES ================= */
-
-const paginationContainerStyle = {
-  marginTop: "24px",
-  display: "flex",
-  flexDirection: "column" as const,
-  gap: "12px",
-  alignItems: "center",
-};
-
-const paginationInfoStyle = {
-  fontSize: "14px",
-  color: "#6c757d",
-};
-
-const paginationControlsStyle = {
-  display: "flex",
-  gap: "8px",
-  alignItems: "center",
-};
-
-const paginationButtonStyle = {
-  padding: "8px 16px",
-  borderRadius: "6px",
-  border: "1px solid #dee2e6",
-  background: "#ffffff",
-  color: "#0D1B2A",
-  fontSize: "14px",
-  fontWeight: 500,
-  cursor: "pointer",
-  transition: "all 0.2s",
-};
-
-const activePageButtonStyle = {
-  background: "#0D1B2A",
-  color: "#ffffff",
-  borderColor: "#0D1B2A",
-};
-
-const pageNumbersStyle = {
-  display: "flex",
-  gap: "4px",
-};
-
-/* ================= SEARCH STYLES ================= */
-
-const searchContainerStyle = {
-  marginBottom: "20px",
-  display: "flex",
-  alignItems: "center",
-  gap: "8px",
-  maxWidth: "500px",
-};
-
-const searchInputStyle = {
-  flex: 1,
-  padding: "10px 16px",
-  fontSize: "14px",
-  border: "1px solid #dee2e6",
-  borderRadius: "6px",
-  outline: "none",
-  transition: "border-color 0.2s",
-};
-
-const clearButtonStyle = {
-  padding: "8px 12px",
-  fontSize: "20px",
-  lineHeight: "1",
-  background: "#f8f9fa",
-  border: "1px solid #dee2e6",
-  borderRadius: "6px",
-  cursor: "pointer",
-  color: "#6c757d",
-  fontWeight: "bold",
-  transition: "all 0.2s",
-};
-
-/* ================= DATE FILTER STYLES ================= */
-
-const dateFilterContainerStyle = {
-  marginBottom: "20px",
-  display: "flex",
-  alignItems: "center",
-  gap: "16px",
-  flexWrap: "wrap" as const,
-};
-
-const dateFilterGroupStyle = {
-  display: "flex",
-  alignItems: "center",
-  gap: "8px",
-};
-
-const dateLabelStyle = {
-  fontSize: "14px",
-  fontWeight: 500,
-  color: "#495057",
-  whiteSpace: "nowrap" as const,
-};
-
-const dateInputStyle = {
-  padding: "8px 12px",
-  fontSize: "14px",
-  border: "1px solid #dee2e6",
-  borderRadius: "6px",
-  outline: "none",
-  transition: "border-color 0.2s",
-  cursor: "pointer",
-};
-
-const clearDateButtonStyle = {
-  padding: "8px 16px",
-  fontSize: "14px",
-  background: "#f8f9fa",
-  border: "1px solid #dee2e6",
-  borderRadius: "6px",
-  cursor: "pointer",
-  color: "#6c757d",
-  fontWeight: 500,
-  transition: "all 0.2s",
-};

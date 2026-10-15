@@ -1,16 +1,20 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, type FormEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { AlertCircle, ArrowRight } from "lucide-react";
 import { API_BASE } from "../services/apiClient";
-import "./login.css";
+import AuthLayout from "../components/AuthLayout";
 
 export default function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = async () => {
+  const handleLogin = async (e: FormEvent) => {
+    e.preventDefault();
     setError("");
+    setLoading(true);
 
     try {
       const response = await fetch(`${API_BASE}/api/auth/login`, {
@@ -27,7 +31,7 @@ export default function Login() {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.detail || "Invalid username or password");
+        setError(typeof data.detail === "string" ? data.detail : "Invalid username or password");
         return;
       }
 
@@ -39,46 +43,58 @@ export default function Login() {
     } catch (err) {
       console.error(err);
       setError("Server unreachable. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="login-wrapper">
-      <div className="login-card">
-        <h2 className="title">OmniScan Login</h2>
+    <AuthLayout>
+      <h1>Welcome back</h1>
+      <p className="lead">Log in to analyze chest X-rays and review your reports.</p>
 
-        <label className="label">Username</label>
-        <input
-          className="input"
-          type="text"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-        />
+      <form onSubmit={handleLogin}>
+        <div className="field">
+          <label htmlFor="username">Username</label>
+          <input
+            id="username"
+            className="input"
+            type="text"
+            autoComplete="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+          />
+        </div>
 
-        <label className="label">Password</label>
-        <input
-          className="input"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+        <div className="field">
+          <label htmlFor="password">Password</label>
+          <input
+            id="password"
+            className="input"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </div>
 
-        {error && <p className="error">{error}</p>}
+        {error && (
+          <div className="alert alert-error" role="alert">
+            <AlertCircle size={17} />
+            {error}
+          </div>
+        )}
 
-        <button className="login-btn" onClick={handleLogin}>
-          Login
+        <button className="btn btn-dark btn-lg btn-block" type="submit" disabled={loading}>
+          {loading ? <span className="spinner" /> : <>Log in <ArrowRight size={17} /></>}
         </button>
+      </form>
 
-        <p className="register-text">
-          New user?{" "}
-          <span
-            className="register-link"
-            onClick={() => navigate("/register")}
-          >
-            Create an account
-          </span>
-        </p>
-      </div>
-    </div>
+      <p className="auth-switch">
+        New to OmniScan? <Link to="/register">Create an account</Link>
+      </p>
+    </AuthLayout>
   );
 }

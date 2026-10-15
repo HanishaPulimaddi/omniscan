@@ -1,46 +1,53 @@
-import { User, LogOut } from "lucide-react";
+import { LayoutGrid, ScanSearch, FileClock, LogOut } from "lucide-react";
+import { Link, NavLink } from "react-router-dom";
+import Brand from "./Brand";
+import { getUsername } from "../lib/auth";
 
 type NavbarProps = {
-  onHistoryClick?: () => void;
   onLogoutClick?: () => void;
 };
 
-export default function Navbar({ onHistoryClick, onLogoutClick }: NavbarProps) {
+const navItems = [
+  { label: "Dashboard", icon: LayoutGrid, path: "/", end: true },
+  { label: "Analyze", icon: ScanSearch, path: "/analyze", end: false },
+  { label: "History", icon: FileClock, path: "/history", end: false },
+];
+
+export default function Navbar({ onLogoutClick }: NavbarProps) {
+  const username = getUsername();
+
   return (
-    <div
-      style={{
-        height: "60px",
-        background: "white",
-        padding: "0 25px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        borderBottom: "1px solid #e5e5e5",
-      }}
-    >
-      <h2 style={{ margin: 0, fontSize: "20px", fontWeight: 600 }}>
-        Dashboard
-      </h2>
+    <header className="topnav">
+      <nav className="topnav-group" aria-label="Main">
+        <Brand />
+        {navItems.map(({ label, icon: Icon, path, end }) => (
+          <NavLink
+            key={path}
+            to={path}
+            end={end}
+            className={({ isActive }) => `navlink${isActive ? " active" : ""}`}
+            title={label}
+          >
+            <Icon size={17} />
+            <span>{label}</span>
+          </NavLink>
+        ))}
+      </nav>
 
-      <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-        {/* Profile / User Icon */}
-        <div
-          style={{ display: "flex", alignItems: "center", cursor: "pointer" }}
-          title="View History"
-          onClick={onHistoryClick}
-        >
-          <User size={22} />
-        </div>
-
-        {/* Logout */}
-        <div
-          style={{ display: "flex", alignItems: "center", cursor: "pointer" }}
-          title="Logout"
-          onClick={onLogoutClick}
-        >
-          <LogOut size={22} />
-        </div>
+      <div className="topnav-actions">
+        <button className="btn btn-ghost btn-sm" onClick={onLogoutClick} title="Log out">
+          <LogOut size={16} />
+          <span className="hide-sm">Log out</span>
+        </button>
+        <Link to="/analyze" className="btn btn-primary btn-sm hide-sm">
+          New scan
+        </Link>
+        {username && (
+          <span className="avatar" title={username}>
+            {username.slice(0, 1)}
+          </span>
+        )}
       </div>
-    </div>
+    </header>
   );
 }

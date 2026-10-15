@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, type FormEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { AlertCircle, ArrowRight, CheckCircle2 } from "lucide-react";
 import { API_BASE } from "../services/apiClient";
-import "./login.css";  // Reuse same styling as login
+import AuthLayout from "../components/AuthLayout";
 
 export default function Register() {
   const navigate = useNavigate();
@@ -13,10 +14,13 @@ export default function Register() {
 
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleRegister = async () => {
+  const handleRegister = async (e: FormEvent) => {
+    e.preventDefault();
     setError("");
     setMessage("");
+    setLoading(true);
 
     try {
       const response = await fetch(`${API_BASE}/api/auth/register`, {
@@ -33,68 +37,99 @@ export default function Register() {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.detail || "Registration failed");
+        setError(typeof data.detail === "string" ? data.detail : "Registration failed. Please check your details.");
         return;
       }
 
-      setMessage("Registration successful! Redirecting to login...");
+      setMessage("Account created. Taking you to log in…");
       setTimeout(() => navigate("/login"), 1500);
-    } catch (err) {
+    } catch {
       setError("Server unreachable");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="login-wrapper">
-      <div className="login-card">
-        <h2 className="title">Create Account</h2>
+    <AuthLayout>
+      <h1>Create your account</h1>
+      <p className="lead">Start screening chest X-rays with structured, AI-assisted reports.</p>
 
-        <label className="label">Full Name</label>
-        <input
-          className="input"
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
+      <form onSubmit={handleRegister}>
+        <div className="field-row">
+          <div className="field">
+            <label htmlFor="name">Full name</label>
+            <input
+              id="name"
+              className="input"
+              type="text"
+              autoComplete="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+            />
+          </div>
 
-        <label className="label">Phone</label>
-        <input
-          className="input"
-          type="text"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-        />
+          <div className="field">
+            <label htmlFor="phone">Phone</label>
+            <input
+              id="phone"
+              className="input"
+              type="tel"
+              autoComplete="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
+          </div>
+        </div>
 
-        <label className="label">Username</label>
-        <input
-          className="input"
-          type="text"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-        />
+        <div className="field">
+          <label htmlFor="username">Username</label>
+          <input
+            id="username"
+            className="input"
+            type="text"
+            autoComplete="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+          />
+        </div>
 
-        <label className="label">Password</label>
-        <input
-          className="input"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+        <div className="field">
+          <label htmlFor="password">Password</label>
+          <input
+            id="password"
+            className="input"
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </div>
 
-        {error && <p className="error">{error}</p>}
-        {message && <p className="success">{message}</p>}
+        {error && (
+          <div className="alert alert-error" role="alert">
+            <AlertCircle size={17} />
+            {error}
+          </div>
+        )}
+        {message && (
+          <div className="alert alert-success" role="status">
+            <CheckCircle2 size={17} />
+            {message}
+          </div>
+        )}
 
-        <button className="login-btn" onClick={handleRegister}>
-          Register
+        <button className="btn btn-dark btn-lg btn-block" type="submit" disabled={loading}>
+          {loading ? <span className="spinner" /> : <>Create account <ArrowRight size={17} /></>}
         </button>
+      </form>
 
-        <p className="register-text">
-          Already have an account?{" "}
-          <span className="register-link" onClick={() => navigate("/login")}>
-            Login
-          </span>
-        </p>
-      </div>
-    </div>
+      <p className="auth-switch">
+        Already have an account? <Link to="/login">Log in</Link>
+      </p>
+    </AuthLayout>
   );
 }
