@@ -4,7 +4,16 @@ load_dotenv()
 from openai import OpenAI
 import os
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+_groq_api_key = os.getenv("GROQ_API_KEY")
+if not _groq_api_key:
+    raise RuntimeError("GROQ_API_KEY is not set — check your .env file")
+
+# Groq's API is OpenAI-wire-compatible, so the same SDK works here —
+# just pointed at Groq's endpoint with a Groq key (free tier, console.groq.com).
+client = OpenAI(
+    api_key=_groq_api_key,
+    base_url="https://api.groq.com/openai/v1",
+)
 
 def generate_medical_report(scores):
     abnormalities = "\n".join([
@@ -42,7 +51,7 @@ Do NOT mention AI limitations. Produce a clean, final radiology report.
 
 
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="openai/gpt-oss-120b",
         messages=[{"role": "user", "content": prompt}]
     )
 

@@ -1,10 +1,26 @@
 import os
+import re
+import uuid
 from sqlalchemy import text
 from app.database.connection import SessionLocal
-from app.utils.file_hash import compute_file_hash
+from app.database.file_hash import compute_file_hash
+from app.services.storage import save_scan_file
 
-UPLOAD_DIR = "app/uploads/scans"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+_ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff", ".webp"}
+
+
+def _sanitize_filename(filename: str) -> str:
+    # Strip any directory components (handles both "/" and "\" separators,
+    # so a payload like "..\\..\\evil.py" can't escape UPLOAD_DIR on any OS)
+    filename = os.path.basename(filename.replace("\\", "/"))
+    # Whitelist safe characters only
+    filename = re.sub(r"[^A-Za-z0-9._-]", "_", filename)
+    return filename or "upload"
+
+
+def _safe_extension(filename: str) -> str:
+    ext = os.path.splitext(filename)[1].lower()
+    return ext if ext in _ALLOWED_EXTENSIONS else ""
 
 
 class FileService:
@@ -40,29 +56,15 @@ class FileService:
                     "file_path": existing[1]
                 }
 
-            # ==============================
-            # ✅ USE ORIGINAL FILENAME
-            # ==============================
-            original_name = file.filename
-            name, ext = os.path.splitext(original_name)
+            # 🛡️ Server-generated storage name: the client-supplied filename
+            # is untrusted input, so only its (whitelisted) extension is
+            # reused — the name itself is a UUID, guaranteeing uniqueness
+            # and giving no attacker-controlled content to the storage key.
+            original_name = _sanitize_filename(file.filename)
+            ext = _safe_extension(original_name)
+            storage_filename = f"{uuid.uuid4().hex}{ext}"
 
-            filename = original_name
-            counter = 1
-
-            # 🛡️ Prevent overwrite
-            while os.path.exists(os.path.join(UPLOAD_DIR, filename)):
-                filename = f"{name}_{counter}{ext}"
-                counter += 1
-
-            # 📁 Filesystem path
-            fs_path = os.path.join(UPLOAD_DIR, filename)
-
-            # 🌐 URL path (what frontend uses)
-            url_path = f"/uploads/scans/{filename}"
-
-            # Save file
-            with open(fs_path, "wb") as f:
-                f.write(file_bytes)
+            url_path = save_scan_file(file_bytes, storage_filename)
 
             # Save DB record
             insert_q = text("""
@@ -73,8 +75,8 @@ class FileService:
 
             new_id = db.execute(insert_q, {
                 "uid": user_id,
-                "name": filename,      # stored final filename
-                "path": url_path,      # ✅ URL PATH (NOT filesystem)
+                "name": original_name,  # original filename, kept for display only
+                "path": url_path,       # ✅ URL PATH (NOT filesystem)
                 "hash": file_hash
             }).fetchone()[0]
 
@@ -83,7 +85,7 @@ class FileService:
             return {
                 "status": "uploaded",
                 "file_id": new_id,
-                "file_name": filename,
+                "file_name": original_name,
                 "file_path": url_path
             }
 

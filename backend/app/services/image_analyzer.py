@@ -1,8 +1,6 @@
 import io
 from PIL import Image
-import numpy as np
-from app.ml.embedding_engine import generate_embedding
-from app.ml.classifier import classify_embedding
+from app.ml.classifier import classify_image
 from app.ml.llm_report import generate_medical_report
 
 
@@ -13,34 +11,26 @@ async def analyze_image(file_bytes: bytes):
     except Exception:
         return {"scores": {}, "report": "Unable to read image."}
 
-    # Generate embedding
-    try:
-        embedding = generate_embedding(image)
-        if embedding is None:
-            return {"scores": {}, "report": "Failed to generate embedding."}
-
-        if isinstance(embedding, np.ndarray):
-            embedding = embedding.tolist()
-
-    except Exception:
-        return {"scores": {}, "report": "Embedding engine error."}
-
     # Classify
     try:
-        scores = classify_embedding(embedding)
-        safe_scores = {str(k): float(v) for k, v in scores.items()}
+        scores = classify_image(image)
+        if not scores:
+            return {"scores": {}, "report": "Failed to classify image."}
     except Exception:
         return {"scores": {}, "report": "Classifier error."}
 
     # Generate report
     try:
-        report_text = generate_medical_report(safe_scores)
+        report_text = generate_medical_report(scores)
         if not report_text:
             report_text = "No meaningful findings detected."
     except Exception:
-        report_text = "Report generation failed."
+        # None (not a placeholder string) so the caller doesn't persist this
+        # as if it were a real report — a retry on the same image should
+        # actually retry generation, not replay a cached failure forever.
+        report_text = None
 
     return {
-        "scores": safe_scores,
+        "scores": scores,
         "report": report_text
     }

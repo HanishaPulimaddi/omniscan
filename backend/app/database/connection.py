@@ -6,7 +6,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
-print("Loaded DB URL:", DATABASE_URL)
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is not set — check your .env file")
 
 # ----------------------------
 # Create engine
@@ -26,12 +27,6 @@ SessionLocal = sessionmaker(
 # Declarative base
 # ----------------------------
 Base = declarative_base()
-
-# ----------------------------
-# Global DB connection (RAW SQL)
-# Used by file_service, analysis_service, etc.
-# ----------------------------
-db = engine.connect()
 
 # ----------------------------
 # ✅ ADD THIS (FASTAPI DEPENDENCY)

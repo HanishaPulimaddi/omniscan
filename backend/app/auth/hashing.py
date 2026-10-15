@@ -1,18 +1,13 @@
-# hashing.py
-# -----------------------------------
-# Plain text mode (NO bcrypt)
-# -----------------------------------
+import bcrypt
+
 
 def hash_password(password: str) -> str:
-    """
-    In plain text mode, return password as-is.
-    Only for development/testing.
-    """
-    return password
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain_password: str, stored_password: str) -> bool:
-    """
-    Compare passwords directly in plain text.
-    """
-    return plain_password == stored_password
+    return bcrypt.checkpw(plain_password.encode("utf-8"), stored_password.encode("utf-8"))
+
+
+def is_hashed(stored_password: str) -> bool:
+    return stored_password.startswith(("$2a$", "$2b$", "$2y$"))

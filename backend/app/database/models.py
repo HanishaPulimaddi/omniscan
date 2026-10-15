@@ -16,9 +16,8 @@ class User(Base):
     phone = Column(String(20))
 
     username = Column(String, unique=True, nullable=False, index=True)
-    email = Column(String, unique=True, nullable=False, index=True)
 
-    password = Column(String(100), nullable=False)
+    password = Column(String(255), nullable=False)
 
     created_at = Column(TIMESTAMP, server_default=func.now())
 
@@ -36,7 +35,7 @@ class Scan(Base):
     __tablename__ = "scan_files"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False)
 
     file_name = Column(String(255), nullable=False)
 
@@ -63,7 +62,7 @@ class Report(Base):
     __tablename__ = "reports"
 
     id = Column(Integer, primary_key=True, index=True)
-    scan_id = Column(Integer, ForeignKey("scan_files.id"), index=True)
+    scan_id = Column(Integer, ForeignKey("scan_files.id", ondelete="CASCADE"), index=True)
 
     scores = Column(JSON)
     report_text = Column(Text)

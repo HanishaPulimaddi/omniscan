@@ -1,12 +1,19 @@
+import os
 import jwt
 from datetime import datetime, timedelta
+from dotenv import load_dotenv
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 
-SECRET_KEY = "f3c4b1a0c88e9f74ac92df1457e0bb8e3d7c9934b7f2c184a6cd5091ef62da38"
+load_dotenv()
+
+SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("JWT_SECRET_KEY is not set — check your .env file")
+
 ALGORITHM = "HS256"
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
 
 # CREATE TOKEN

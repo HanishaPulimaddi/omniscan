@@ -1,9 +1,11 @@
+import os
 from typing import Optional
 from datetime import date, datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database.connection import get_db
+from app.database.models import Scan
 from app.auth.jwt_handler import get_current_user
 from app.services.history_service import (
     get_user_history,
@@ -111,3 +113,43 @@ def fetch_single_history(
         raise HTTPException(status_code=404, detail="Report not found")
 
     return record
+
+
+# --------------------------------------------------
+# GET SCAN IMAGE URL
+# --------------------------------------------------
+# Scan.file_path holds a bare S3 key when AWS_S3_BUCKET is set (the bucket is
+# private — medical images), or a local /uploads/scans/<file> path otherwise.
+# Returns the resolved URL as JSON rather than redirecting: a presigned URL
+# is itself the credential, so the frontend can load it directly (as a plain
+# navigation/<img> load, not a cross-origin fetch) without needing bucket
+# CORS or proxying image bytes through this API.
+@router.get("/{scan_id}/image-url")
+def get_scan_image_url(
+    scan_id: int,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    user_id = current_user["user_id"]
+
+    scan = (
+        db.query(Scan)
+        .filter(Scan.id == scan_id, Scan.user_id == user_id)
+        .first()
+    )
+    if not scan:
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    bucket = os.getenv("AWS_S3_BUCKET")
+    if bucket:
+        import boto3
+
+        s3 = boto3.client("s3")
+        url = s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": bucket, "Key": scan.file_path},
+            ExpiresIn=300,
+        )
+        return {"url": url}
+
+    return {"url": scan.file_path}

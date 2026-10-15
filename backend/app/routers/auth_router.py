@@ -1,20 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-import jwt
 
 from app.database.connection import SessionLocal
 from app.database.models import User
-from app.auth.jwt_handler import create_access_token
-
-# ⚠ MUST match jwt_handler.py
-SECRET_KEY = "your-secret-key"
-ALGORITHM = "HS256"
+from app.auth.jwt_handler import create_access_token, get_current_user
+from app.auth.hashing import hash_password, verify_password, is_hashed
+from app.rate_limit import limiter
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 
 # -----------------------------
@@ -35,7 +29,6 @@ class UserRegister(BaseModel):
     name: str
     phone: str | None = None
     username: str
-    email: str
     password: str
 
 
@@ -45,23 +38,20 @@ class UserLogin(BaseModel):
 
 
 # -----------------------------
-# Register User (Plain Password)
+# Register User
 # -----------------------------
 @router.post("/register")
-def register(user: UserRegister, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def register(request: Request, user: UserRegister, db: Session = Depends(get_db)):
 
     if db.query(User).filter(User.username == user.username).first():
         raise HTTPException(status_code=400, detail="Username already exists")
-
-    if db.query(User).filter(User.email == user.email).first():
-        raise HTTPException(status_code=400, detail="Email already exists")
 
     new_user = User(
         name=user.name,
         phone=user.phone,
         username=user.username,
-        email=user.email,
-        password=user.password  # ⚠ Plain text as requested
+        password=hash_password(user.password)
     )
 
     db.add(new_user)
@@ -72,18 +62,27 @@ def register(user: UserRegister, db: Session = Depends(get_db)):
 
 
 # -----------------------------
-# Login (Plain Password)
+# Login
 # -----------------------------
 @router.post("/login")
-def login(data: UserLogin, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def login(request: Request, data: UserLogin, db: Session = Depends(get_db)):
 
     user = db.query(User).filter(User.username == data.username).first()
 
     if not user:
         raise HTTPException(status_code=400, detail="Invalid username")
 
-    if user.password != data.password:
-        raise HTTPException(status_code=400, detail="Incorrect password")
+    if is_hashed(user.password):
+        if not verify_password(data.password, user.password):
+            raise HTTPException(status_code=400, detail="Incorrect password")
+    else:
+        # Legacy plaintext account from before hashing was added.
+        # Verify directly once, then migrate it to a bcrypt hash.
+        if user.password != data.password:
+            raise HTTPException(status_code=400, detail="Incorrect password")
+        user.password = hash_password(data.password)
+        db.commit()
 
     token = create_access_token({
         "user_id": user.id,
@@ -97,34 +96,22 @@ def login(data: UserLogin, db: Session = Depends(get_db)):
 
 
 # -----------------------------
-# 🔐 GET CURRENT USER (NEW)
+# Current User Profile
 # -----------------------------
-def get_current_user(
-    token: str = Depends(oauth2_scheme),
+@router.get("/me")
+def get_me(
+    current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id = payload.get("user_id")
-
-        if user_id is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token payload"
-            )
-
-    except jwt.PyJWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token"
-        )
-
-    user = db.query(User).filter(User.id == user_id).first()
+    user = db.query(User).filter(User.id == current_user["user_id"]).first()
 
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found"
-        )
+        raise HTTPException(status_code=404, detail="User not found")
 
-    return user
+    return {
+        "id": user.id,
+        "name": user.name,
+        "username": user.username,
+        "phone": user.phone,
+        "created_at": user.created_at
+    }
